@@ -7,10 +7,11 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '../store';
 import { loadDummyData } from '../store/slices/childrenSlice';
 import { loadDummyLogs } from '../store/slices/logsSlice';
-import { fetchCurrentWeather } from '../store/slices/environmentSlice';
+import { fetchCurrentWeather, fetchCurrentLocationWeather, fetchCurrentLocationWeatherPublic } from '../store/slices/environmentSlice';
 
 // Helper function to get pollen level color
 const getPollenColor = (category: string): string => {
@@ -33,16 +34,33 @@ const getPollenColor = (category: string): string => {
 
 export default function HomeScreen() {
   const dispatch = useAppDispatch();
+  const navigation = useNavigation();
   const { selectedChild, children } = useAppSelector((state) => state.children);
   const { logs } = useAppSelector((state) => state.logs);
-  const { currentWeather } = useAppSelector((state) => state.environment);
-
-  useEffect(() => {
+  const { currentWeather } = useAppSelector((state) => state.environment);  useEffect(() => {
     // Load dummy data for UI prototyping
     dispatch(loadDummyData());
     dispatch(loadDummyLogs());
-    dispatch(fetchCurrentWeather('New York, NY'));
+    
+    // Debug: Log the current weather data
+    console.log('Current weather data:', currentWeather);
+    
+    // Try to get current location first, fallback to New York
+    dispatch(fetchCurrentLocationWeatherPublic()).catch(() => {
+      console.log('Location fetch failed, using fallback');
+      dispatch(fetchCurrentWeather('New York, NY'));
+    });
   }, [dispatch]);
+
+  // Debug effect to monitor weather data changes
+  useEffect(() => {
+    console.log('Weather data updated:', currentWeather);
+    if (currentWeather?.dailyPollenInfo) {
+      console.log('Pollen data available:', currentWeather.dailyPollenInfo);
+    } else {
+      console.log('No pollen data in weather response');
+    }
+  }, [currentWeather]);
 
   const recentLogs = logs.slice(0, 3);
   const todayLog = logs.find(log => {
@@ -103,7 +121,15 @@ export default function HomeScreen() {
         </View>        {/* Environment Data */}
         {currentWeather && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Environment</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Environment</Text>
+              <TouchableOpacity 
+                style={styles.viewMoreButton}
+                onPress={() => navigation.navigate('Pollen' as never)}
+              >
+                <Text style={styles.viewMoreText}>View Pollen Details →</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.environmentCard}>
               <Text style={styles.locationText}>{currentWeather.location}</Text>
               <View style={styles.environmentRow}>
@@ -111,32 +137,69 @@ export default function HomeScreen() {
                 <Text>Humidity: {currentWeather.humidity}%</Text>
               </View>
               <View style={styles.environmentRow}>
-                <Text>Pollen: {currentWeather.pollenCount}</Text>
                 <Text>Air Quality: {currentWeather.airQuality}</Text>
-              </View>
-              <View style={styles.environmentRow}>
                 <Text>UV Index: {currentWeather.uvIndex}</Text>
-                <Text>Weather: {currentWeather.description}</Text>
               </View>
               
-              {/* Enhanced Pollen Information */}
-              {currentWeather.dailyPollenInfo && currentWeather.dailyPollenInfo.length > 0 && (
-                <View style={styles.pollenSection}>
-                  <Text style={styles.pollenTitle}>Today's Pollen Forecast</Text>
-                  {currentWeather.dailyPollenInfo[0].pollenTypes.map((pollen, index) => (
-                    <View key={index} style={styles.pollenRow}>
-                      <Text style={styles.pollenType}>{pollen.displayName}</Text>
-                      <View style={[styles.pollenBadge, { backgroundColor: getPollenColor(pollen.category) }]}>
-                        <Text style={styles.pollenCategory}>{pollen.category}</Text>
+              {/* Pollen Overview */}
+              <View style={styles.pollenOverview}>
+                <Text style={styles.pollenOverviewTitle}>🌸 Pollen Level</Text>
+                <View style={[styles.pollenLevelBadge, { backgroundColor: getPollenColor(currentWeather.pollenCount || 'moderate') }]}>
+                  <Text style={styles.pollenLevelText}>
+                    {(currentWeather.pollenCount || 'moderate').toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+                {/* Quick Pollen Info */}
+              {currentWeather.dailyPollenInfo && currentWeather.dailyPollenInfo.length > 0 ? (
+                <View style={styles.quickPollenInfo}>
+                  <Text style={styles.quickPollenTitle}>Today's Top Pollen Types:</Text>
+                  {currentWeather.dailyPollenInfo[0].pollenTypes.slice(0, 3).map((pollen, index) => (
+                    <View key={index} style={styles.quickPollenItem}>
+                      <Text style={styles.quickPollenName}>{pollen.displayName}</Text>
+                      <View style={[styles.quickPollenBadge, { backgroundColor: getPollenColor(pollen.category) }]}>
+                        <Text style={styles.quickPollenCategory}>{pollen.category}</Text>
                       </View>
                     </View>
                   ))}
+                  
+                  {/* Pollen Summary */}
+                  {currentWeather.pollenSummary && (
+                    <View style={styles.pollenSummary}>
+                      <Text style={styles.pollenSummaryTitle}>📊 Quick Summary</Text>
+                      <Text style={styles.pollenSummaryText}>
+                        Dominant: {currentWeather.pollenSummary.todayDominant} • Index: {currentWeather.pollenSummary.todayIndex}
+                      </Text>
+                      <Text style={styles.pollenSummaryText}>
+                        Peak: {currentWeather.pollenSummary.peakDay} • {currentWeather.pollenSummary.forecastDays} days forecast
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <TouchableOpacity 
+                    style={styles.viewDetailsButton}
+                    onPress={() => navigation.navigate('Pollen' as never)}
+                  >
+                    <Text style={styles.viewDetailsText}>View Full Forecast</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.limitedPollenInfo}>
+                  <Text style={styles.limitedPollenTitle}>ℹ️ Limited Pollen Data</Text>
+                  <Text style={styles.limitedPollenText}>
+                    Detailed pollen forecast requires Google Pollen API setup
+                  </Text>
+                  <TouchableOpacity 
+                    style={styles.setupButton}
+                    onPress={() => navigation.navigate('Pollen' as never)}
+                  >
+                    <Text style={styles.setupButtonText}>Setup & Learn More</Text>
+                  </TouchableOpacity>
                 </View>
               )}
-              
-              {currentWeather.plantDescription && (
+                {currentWeather.plantDescriptions && currentWeather.plantDescriptions.length > 0 && (
                 <Text style={styles.plantDescription}>
-                  {currentWeather.plantDescription}
+                  {JSON.stringify(currentWeather.plantDescriptions[0])}
                 </Text>
               )}
             </View>
@@ -324,13 +387,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#fff',
-  },
-  plantDescription: {
+  },  plantDescription: {
     fontSize: 12,
     color: '#666',
     fontStyle: 'italic',
     marginTop: 8,
     lineHeight: 16,
+  },
+  debugSection: {
+    backgroundColor: '#fff3cd',
+    padding: 8,
+    borderRadius: 4,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+  },
+  debugText: {
+    fontSize: 12,
+    color: '#856404',
+    marginBottom: 2,
   },
   logCard: {
     backgroundColor: '#f8f9fa',
@@ -365,10 +440,147 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 4,
     alignItems: 'center',
-  },
-  actionButtonText: {
+  },  actionButtonText: {
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  // New styles for enhanced pollen display
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  viewMoreButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  viewMoreText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  pollenOverview: {
+    backgroundColor: '#f0f8f0',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  pollenOverviewTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2e7d32',
+    marginBottom: 8,
+  },
+  pollenLevelBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  pollenLevelText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  quickPollenInfo: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  quickPollenTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  quickPollenItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  quickPollenName: {
+    fontSize: 13,
+    color: '#333',
+    flex: 1,
+  },
+  quickPollenBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  quickPollenCategory: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  viewDetailsButton: {
+    backgroundColor: '#2196F3',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  viewDetailsText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  limitedPollenInfo: {
+    backgroundColor: '#fff8e1',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#ffcc02',
+  },
+  limitedPollenTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#f57c00',
+    marginBottom: 6,
+  },
+  limitedPollenText: {
+    fontSize: 12,
+    color: '#ef6c00',
+    marginBottom: 8,
+    lineHeight: 16,
+  },  setupButton: {
+    backgroundColor: '#ff9800',
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  setupButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  pollenSummary: {
+    backgroundColor: '#f0f8f0',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  pollenSummaryTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2e7d32',
+    marginBottom: 4,
+  },
+  pollenSummaryText: {
+    fontSize: 11,
+    color: '#388e3c',
+    lineHeight: 14,
   },
 });

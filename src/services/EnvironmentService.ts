@@ -1,5 +1,6 @@
 import ApiService from './ApiService';
 import { WeatherData, ResearchArticle, DoctorReport, ApiResponse, PaginatedResponse } from '../models';
+import * as Location from 'expo-location';
 
 class EnvironmentService {
   // Get environmental data for location
@@ -20,31 +21,55 @@ class EnvironmentService {
     };
   }
 
-  // Get user's current location using browser geolocation API
+  // Get current location environment data using public endpoint (for testing)
+  async getCurrentEnvironmentDataPublic(lat: number, lon: number): Promise<ApiResponse<WeatherData>> {
+    const response = await ApiService.get<any>('/environment/public/current', { lat, lon });
+    return {
+      ...response,
+      data: response.data ? this.transformEnvironmentData(response.data) : undefined
+    };
+  }  // Get user's current location using Expo Location API
   async getCurrentLocation(): Promise<{ lat: number; lon: number }> {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported by this browser'));
-        return;
+    try {
+      console.log('📍 Requesting location permissions...');
+      
+      // Request location permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
+        console.log('❌ Location permission denied');
+        throw new Error('Location permission denied');
       }
+      
+      console.log('✅ Location permission granted, getting position...');
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            lat: position.coords.latitude,
-            lon: position.coords.longitude
-          });
-        },
-        (error) => {
-          reject(error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000 // 5 minutes
+      // Get current position with options for better reliability
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      console.log('📍 Got user location:', location.coords.latitude, location.coords.longitude);
+      
+      return {
+        lat: location.coords.latitude,
+        lon: location.coords.longitude
+      };
+    } catch (error) {
+      console.error('❌ Location error:', error);
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('permission')) {
+          throw new Error('Location permission denied');
+        } else if (error.message.includes('timeout')) {
+          throw new Error('Location request timed out');
+        } else if (error.message.includes('unavailable')) {
+          throw new Error('Location services unavailable');
         }
-      );
-    });
+      }
+      
+      throw new Error(`Failed to get location: ${error}`);
+    }
   }
 
   // Transform backend response to frontend WeatherData format
@@ -58,21 +83,71 @@ class EnvironmentService {
       airQuality: data.air_quality_index,
       uvIndex: data.uv_index,
       description: data.weather_conditions,
-      pollenCount: data.pollen_count,
-      pollenData: data.pollen_data,
-      dailyPollenInfo: data.daily_pollen_info?.map((forecast: any) => ({
+      pollenCount: data.pollen_count,      pollenData: data.pollen_data,      dailyPollenInfo: data.daily_pollen_info?.map((forecast: any) => ({
         date: forecast.date,
+        dayName: this.getDayName(forecast.date),
+        overallIndex: forecast.overall_index || 0,
+        dominantPollen: forecast.pollen_types?.reduce((prev: any, current: any) => 
+          (current.index_value > (prev?.index_value || 0)) ? current : prev
+        )?.display_name || 'None',
         pollenTypes: forecast.pollen_types?.map((pollen: any) => ({
           code: pollen.code,
           displayName: pollen.display_name,
           indexValue: pollen.index_value,
           category: pollen.category,
           color: pollen.color,
-          inSeason: pollen.in_season
+          inSeason: pollen.in_season,
+          severityLevel: this.getSeverityLevel(pollen.index_value),
+          healthImpact: this.getHealthImpact(pollen.category)
         })) || []
       })) || [],
-      plantDescription: data.plant_description
+      plantDescriptions: data.plant_description
     };
+  }
+
+  // Helper method to get day name from date string
+  private getDayName(dateString: string): string {
+    const date = new Date(dateString);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Tomorrow';
+    } else {
+      return date.toLocaleDateString('en-US', { weekday: 'long' });
+    }
+  }
+
+  // Helper method to get severity level from index value
+  private getSeverityLevel(indexValue: number): string {
+    if (indexValue === 0) return 'None';
+    if (indexValue <= 1) return 'Very Low';
+    if (indexValue <= 2) return 'Low';
+    if (indexValue <= 3) return 'Moderate';
+    if (indexValue <= 4) return 'High';
+    return 'Very High';
+  }
+
+  // Helper method to get health impact from category
+  private getHealthImpact(category: string): string[] {
+    switch (category.toUpperCase()) {
+      case 'NONE':
+      case 'VERY_LOW':
+        return ['Minimal symptoms expected', 'Safe for outdoor activities'];
+      case 'LOW':
+        return ['Mild symptoms possible', 'Generally safe outdoors'];
+      case 'MODERATE':
+        return ['Moderate symptoms possible', 'Limit outdoor time if sensitive'];
+      case 'HIGH':
+        return ['Significant symptoms likely', 'Avoid prolonged outdoor exposure'];
+      case 'VERY_HIGH':
+        return ['Severe symptoms expected', 'Stay indoors if possible'];
+      default:
+        return ['Monitor symptoms', 'Take precautions as needed'];
+    }
   }
 
   // Helper method to get pollen risk level for specific allergens

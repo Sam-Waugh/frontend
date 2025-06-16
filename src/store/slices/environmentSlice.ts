@@ -66,6 +66,26 @@ export const fetchCurrentLocationWeather = createAsyncThunk(
   }
 );
 
+export const fetchCurrentLocationWeatherPublic = createAsyncThunk(
+  'environment/fetchCurrentLocationWeatherPublic',
+  async () => {
+    try {
+      // Get user's current location
+      const location = await environmentService.getCurrentLocation();
+      
+      // Fetch weather data for current location using public endpoint
+      const response = await environmentService.getCurrentEnvironmentDataPublic(location.lat, location.lon);
+      if (response.success && response.data) {
+        return response.data;
+      } else {
+        throw new Error(response.error || 'Failed to fetch weather data');
+      }
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch weather data');
+    }
+  }
+);
+
 const environmentSlice = createSlice({
   name: 'environment',
   initialState,
@@ -111,6 +131,19 @@ const environmentSlice = createSlice({
         state.currentWeather = action.payload;
       })
       .addCase(fetchCurrentLocationWeather.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message || 'Failed to fetch weather';
+      })
+      // fetchCurrentLocationWeatherPublic
+      .addCase(fetchCurrentLocationWeatherPublic.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchCurrentLocationWeatherPublic.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.currentWeather = action.payload;
+      })
+      .addCase(fetchCurrentLocationWeatherPublic.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.error.message || 'Failed to fetch weather';
       });

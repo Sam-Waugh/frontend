@@ -57,8 +57,67 @@ export interface PollenTypeData {
     blue: number;
   };
   inSeason: boolean;
+  healthRecommendations?: string[];
+  healthImpact?: string;
+  severityLevel?: number;
+  plantInfo?: {
+    family?: string;
+    season?: string;
+    specialColors?: any;
+    specialShapes?: any;
+    crossReaction?: string;
+    picture?: string;
+  };
 }
 
+export interface DailyPollenForecast {
+  date: string;
+  dayName: string;
+  pollenTypes: PollenTypeData[];
+  overallIndex: number;
+  dominantPollen: string;
+}
+
+export interface PollenSummary {
+  todayDominant: string;
+  todayIndex: number;
+  forecastDays: number;
+  peakDay: string;
+}
+
+export interface HeatmapTile {
+  url: string;
+  x: number;
+  y: number;
+  offsetX?: number;
+  offsetY?: number;
+}
+
+export interface HeatmapTileInfo {
+  displayName: string;
+  mainTile: {
+    url: string;
+    x: number;
+    y: number;
+  };
+  surroundingTiles: HeatmapTile[];
+  tileTemplate: string;
+}
+
+export interface PollenHeatmapData {
+  center: {
+    lat: number;
+    lon: number;
+    zoom: number;
+  };
+  tiles: {
+    tree_upi?: HeatmapTileInfo;
+    grass_upi?: HeatmapTileInfo;
+    weed_upi?: HeatmapTileInfo;
+  };
+}
+
+// Legacy compatibility
 export interface PollenForecast {
   date: string;
   pollenTypes: PollenTypeData[];
@@ -73,12 +132,21 @@ export interface WeatherData {
   airQuality: number;
   uvIndex: number;
   description: string;
+  
   // Enhanced pollen data from Google Maps API
   pollenData?: any;
-  dailyPollenInfo?: PollenForecast[];
-  plantDescription?: string;
+  dailyPollenInfo?: DailyPollenForecast[];
+  plantDescriptions?: any[];
+  regionCode?: string;
+  pollenSummary?: PollenSummary;
+  heatmapTiles?: PollenHeatmapData;
+  
   // Legacy field for backward compatibility
   pollenCount: string;
+  
+  // Future enhancements
+  weatherForecast?: any[];
+  airQualityForecast?: any[];
 }
 
 export interface ResearchArticle {
@@ -146,6 +214,7 @@ export type RootStackParamList = {
   ImageDiary: { childId: string };
   Profile: { childId?: string };
   Research: undefined;
+  Pollen: undefined;
   DoctorReport: { childId: string };
   Settings: undefined;
   Test: undefined;

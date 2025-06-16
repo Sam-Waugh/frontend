@@ -4,15 +4,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 class ApiService {
   private api: AxiosInstance;
+
   constructor() {
     this.api = axios.create({
-      baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://172.16.0.31:8090/api/v1',
+      baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8090/api/v1',
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
+    // Request interceptor for auth token
     this.api.interceptors.request.use(
       async (config) => {
         const token = await this.getAuthToken();
@@ -24,6 +26,7 @@ class ApiService {
       (error) => Promise.reject(error)
     );
 
+    // Response interceptor for error handling
     this.api.interceptors.response.use(
       (response) => response,
       async (error) => {
@@ -37,11 +40,14 @@ class ApiService {
 
   private async getAuthToken(): Promise<string | null> {
     try {
+      // For development: try to get stored token first
       const storedToken = await AsyncStorage.getItem('auth_token');
       if (storedToken) {
         return storedToken;
       }
       
+      // Development fallback: create a test token
+      console.log('No stored token found, attempting to get test token...');
       const testToken = await this.getTestToken();
       if (testToken) {
         await AsyncStorage.setItem('auth_token', testToken);
@@ -57,6 +63,7 @@ class ApiService {
 
   private async getTestToken(): Promise<string | null> {
     try {
+      // First, try to create/login test user
       const loginData = {
         username: 'test@allergyapp.com',
         password: 'testpassword123'
@@ -64,17 +71,24 @@ class ApiService {
       
       const response = await fetch(`${this.api.defaults.baseURL}/auth/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
         body: new URLSearchParams(loginData).toString()
       });
       
       if (response.ok) {
         const tokenData = await response.json();
+        console.log('✅ Test token obtained');
         return tokenData.access_token;
       } else if (response.status === 401) {
+        // User doesn't exist, try to create
+        console.log('User not found, creating test user...');
         const createResponse = await fetch(`${this.api.defaults.baseURL}/auth/register`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
             email: 'test@allergyapp.com',
             password: 'testpassword123',
@@ -83,19 +97,24 @@ class ApiService {
         });
         
         if (createResponse.ok || createResponse.status === 400) {
+          // User created or already exists, try login again
           const retryResponse = await fetch(`${this.api.defaults.baseURL}/auth/token`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
             body: new URLSearchParams(loginData).toString()
           });
           
           if (retryResponse.ok) {
             const tokenData = await retryResponse.json();
+            console.log('✅ Test token obtained after user creation');
             return tokenData.access_token;
           }
         }
       }
       
+      console.log('❌ Failed to get test token');
       return null;
     } catch (error) {
       console.error('Error getting test token:', error);
@@ -106,15 +125,18 @@ class ApiService {
   private async handleUnauthorized(): Promise<void> {
     try {
       await AsyncStorage.multiRemove(['auth_token', 'auth_user']);
+      // Navigate to login screen or emit event for app-wide logout
+      console.log('Unauthorized access - cleared auth data');
     } catch (error) {
       console.error('Error clearing auth data:', error);
     }
   }
 
-  // FIXED: FastAPI returns data directly, not wrapped in ApiResponse
+  // Generic request methods - Fixed for FastAPI direct responses
   async get<T>(url: string, params?: any): Promise<ApiResponse<T>> {
     try {
       const response: AxiosResponse<T> = await this.api.get(url, { params });
+      // FastAPI returns data directly, wrap in ApiResponse format
       return {
         success: true,
         data: response.data
@@ -161,6 +183,8 @@ class ApiService {
   }
 
   private handleError(error: any): ApiResponse<any> {
+    console.error('API Error:', error);
+    
     if (error.response) {
       return {
         success: false,

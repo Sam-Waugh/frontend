@@ -12,13 +12,15 @@ import ResearchScreen from '../screens/ResearchScreen';
 import DoctorReportScreen from '../screens/DoctorReportScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import TestScreen from '../screens/TestScreen';
+import PollenScreen from '../screens/PollenScreen'; // Back to original to test with fixed map
+import PollenDebugScreen from '../screens/PollenDebugScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
 function TabNavigator() {
-  return (
-    <Tab.Navigator
+  return (    <Tab.Navigator
+      id={undefined}
       screenOptions={{
         tabBarStyle: {
           backgroundColor: '#fff',
@@ -35,9 +37,6 @@ function TabNavigator() {
         component={HomeScreen}
         options={{
           tabBarLabel: 'Home',
-          // tabBarIcon: ({ color, size }) => (
-          //   <Icon name="home" size={size} color={color} />
-          // ),
         }}
       />
       <Tab.Screen
@@ -45,9 +44,6 @@ function TabNavigator() {
         component={DailyLogScreen}
         options={{
           tabBarLabel: 'Log',
-          // tabBarIcon: ({ color, size }) => (
-          //   <Icon name="add-circle" size={size} color={color} />
-          // ),
         }}
         initialParams={{ childId: '' }}
       />
@@ -56,9 +52,6 @@ function TabNavigator() {
         component={ImageDiaryScreen}
         options={{
           tabBarLabel: 'Photos',
-          // tabBarIcon: ({ color, size }) => (
-          //   <Icon name="photo-library" size={size} color={color} />
-          // ),
         }}
         initialParams={{ childId: '' }}
       />
@@ -67,9 +60,13 @@ function TabNavigator() {
         component={ResearchScreen}
         options={{
           tabBarLabel: 'Research',
-          // tabBarIcon: ({ color, size }) => (
-          //   <Icon name="library-books" size={size} color={color} />
-          // ),
+        }}
+      />
+      <Tab.Screen
+        name="Pollen"
+        component={PollenScreen}
+        options={{
+          tabBarLabel: 'Pollen',
         }}
       />
       <Tab.Screen
@@ -77,18 +74,22 @@ function TabNavigator() {
         component={TestScreen}
         options={{
           tabBarLabel: 'API Test',
-          // tabBarIcon: ({ color, size }) => (
-          //   <Icon name="bug-report" size={size} color={color} />
-          // ),
+        }}
+      />
+      <Tab.Screen
+        name="PollenDebug"
+        component={PollenDebugScreen}
+        options={{
+          tabBarLabel: 'Debug',
         }}
       />
     </Tab.Navigator>
   );
 }
 
-export default function AppNavigator() {
-  return (
+export default function AppNavigator() {  return (
     <Stack.Navigator
+      id={undefined}
       initialRouteName="TabNavigator"
       screenOptions={{
         headerStyle: {
